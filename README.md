@@ -235,7 +235,7 @@ simplified headers (`>ENTRY_ID`).
 
 ```bash
 virprotrag search-fasta \
-    --query example/test_query.fasta \
+    --query examples/test_query.fasta \
     --output search_results.tsv \
     --threads 16
 ```
