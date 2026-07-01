@@ -1,0 +1,38 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Large data files (>1 MB)
+data/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment (keep .env.example, ignore .env)
+.env
+
+# Test outputs
+test_output/
+
+# HPC / NFS artifacts
+.nfs*
+.vimsig/
+vim_*
+
+# Vim temp files
+.*.save
+.*.un~
+.e:*
