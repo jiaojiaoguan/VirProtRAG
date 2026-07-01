@@ -35,15 +35,14 @@ dependencies = [
     "openai>=1.0",
     "anthropic>=0.30",
     "requests>=2.28",
-]
-
-[project.optional-dependencies]
-medcpt = [
     "faiss-cpu>=1.7",
     "sentence-transformers>=2.2",
     "transformers>=4.30",
     "torch>=2.0",
 ]
+
+[project.optional-dependencies]
+medcpt = []  # now in core dependencies
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",

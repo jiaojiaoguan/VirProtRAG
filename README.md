@@ -64,7 +64,6 @@ virprotrag --phase bm25 \
     --gene "terL" \
     --organism "Escherichia phage T4" \
     --output bm25_output.json \
-    --verbose
 ```
 
 This saves synonyms + queries + PubMed PMIDs to `bm25_output.json`.
@@ -90,7 +89,6 @@ virprotrag annotate \
     --bm25 bm25_output.json \
     --medcpt medcpt_output.json \
     --output annotation.json
-
 ```
 
 **Phased mode arguments (`--bm25`/`--medcpt`):**
@@ -108,19 +106,17 @@ virprotrag annotate \
 
 ## Use Case 2: Batch Protein RAG
 
-Process dozens or hundreds of proteins from a CSV/TSV file. Supports two modes: all-in-one (single command per protein) and phased (split into BM25/MedCPT/Annotate stages for HPC).
+Process dozens or hundreds of proteins from a TSV file. Supports two modes: all-in-one (single command per protein) and phased (split into BM25/MedCPT/Annotate stages for HPC).
 
 ### 2.1 All-in-One Batch
 
 ```bash
 virprotrag batch \
-    --input proteins.csv \
-    --output batch_results/annotations.tsv \
-    --skip-dense --skip-quality \
-    --resume
+    --input examples/sample_proteins.tsv \
+    --output batch_results/sample_proteins.tsv
 ```
 
-**Input format (CSV or TSV):**
+**Input format (TSV):**
 
 | column         | required | description                                             |
 | -------------- | -------- | ------------------------------------------------------- |
@@ -129,22 +125,22 @@ virprotrag batch \
 | `gene_name`    | No       | Gene name                                               |
 | `entry`        | No       | Unique ID (auto-generated from protein_name if missing) |
 
-Example `proteins.csv`:
+Example `sample_proteins.tsv`:
 
-```csv
-entry,protein_name,gene_name,organism
-HCV_core,Core protein,C,Hepatitis C virus
-SARS2_S,Spike glycoprotein,S,SARS-CoV-2
-EBOV_NP,Nucleoprotein,N,Ebola virus
+```tsv
+entry    protein_name    gene_name    organism
+HCV_core    Core protein    C,Hepatitis    C virus
+SARS2_S    Spike glycoprotein    S    SARS-CoV-2
+EBOV_NP    Nucleoprotein    NEbola virus
 ```
 
-A pre-made example is at `examples/sample_proteins.csv`.
+A pre-made example is at `examples/sample_proteins.tsv`.
 
 **Batch all-in-one arguments:**
 
 | Argument         | Required | Default                             | Description                    |
 | ---------------- | -------- | ----------------------------------- | ------------------------------ |
-| `--input`        | Yes      | —                                   | CSV/TSV file path              |
+| `--input`        | Yes      | —                                   | TSV file path                  |
 | `--output`       | No       | `virprotrag_output/annotations.tsv` | Output TSV path                |
 | `--topk`         | No       | 10                                  | Papers for generation          |
 | `--skip-dense`   | No       | False                               | Skip MedCPT                    |
@@ -161,7 +157,7 @@ Split the batch pipeline into three phases — ideal for processing hundreds of 
 
 ```bash
 virprotrag batch --phase bm25 \
-    --input proteins.csv \
+    --input proteins.tsv \
     --output batch_bm25/ \
     --retrieval-topk 100 \
     --resume
@@ -196,7 +192,7 @@ virprotrag batch --phase annotate \
 
 | Argument           | Phase        | Description                                                     |
 | ------------------ | ------------ | --------------------------------------------------------------- |
-| `--input`          | All          | CSV (bm25 phase) or directory of JSONs (medcpt/annotate phases) |
+| `--input`          | All          | TSV (bm25 phase) or directory of JSONs (medcpt/annotate phases) |
 | `--output`         | All          | Output directory or TSV path                                    |
 | `--retrieval-topk` | bm25, medcpt | Max PMIDs per search (default: 100)                             |
 | `--batch-size`     | medcpt       | Encoding batch size (default: 2048)                             |
@@ -227,6 +223,20 @@ Given a FASTA file of viral protein sequences, run DIAMOND BLASTP against the vi
 | `uniprotkb_*.tsv`          | ~19 MB  | UniProt annotation fields                         |
 | `ViProtRAG_database.jsonl` | ~7.7 MB | VirProtRAG functional summaries                   |
 | `SeqBench.jsonl`           | ~9.6 MB | Sequence benchmark annotations                    |
+
+The pre-built `viral_proteins.dmnd` is included in the repository for convenience.
+However, the DIAMOND binary index is **version-dependent** — if your local DIAMOND
+version differs, `search-fasta` will fail with a version mismatch error.
+In that case, rebuild the index from the source FASTA:
+
+```bash
+# Rebuild DIAMOND database from the viral protein FASTA
+diamond makedb --in data/viral_proteins.fasta --db data/viral_proteins --threads 8
+```
+
+This overwrites `data/viral_proteins.dmnd` with a version-compatible index.
+The FASTA file contains 17,517 reviewed UniProt viral protein sequences with
+simplified headers (`>ENTRY_ID`).
 
 ### 3.2 Run Search
 
@@ -300,6 +310,8 @@ The output TSV uses UTF-8 with BOM for Excel compatibility. Greek characters (e.
 ```bash
 git clone https://github.com/jiaojiaoguan/VirProtRAG.git
 cd VirProtRAG
+conda create -n virprotrag python=3.10 -y
+conda activate virprotrag
 pip install -e .
 ```
 
@@ -307,7 +319,7 @@ pip install -e .
 
 ```bash
 virprotrag --help
-# Expected subcommands: annotate, annotate-seq, batch, search-fasta
+# Expected subcommands: annotate, batch, search-fasta
 ```
 
 ---
@@ -337,12 +349,12 @@ LLM_MODEL=gpt-4.1    # overrides all tasks with this model
 
 ### LLM Providers
 
-| Provider        | Default Models                       | API Key Env         | Base URL      |
-| --------------- | ------------------------------------ | ------------------- | ------------- |
-| **DeepSeek**    | `deepseek-chat` (all tasks)          | `DEEPSEEK_API_KEY`  | Auto-detected |
-| **OpenAI**      | `gpt-4o-mini` / `gpt-4o`             | `OPENAI_API_KEY`    | Auto-detected |
+| Provider        | Default Models                                         | API Key Env         | Base URL      |
+| --------------- | ------------------------------------------------------ | ------------------- | ------------- |
+| **DeepSeek**    | `deepseek-chat` (all tasks)                            | `DEEPSEEK_API_KEY`  | Auto-detected |
+| **OpenAI**      | `gpt-4o-mini` / `gpt-4o`                               | `OPENAI_API_KEY`    | Auto-detected |
 | **Anthropic**   | `claude-haiku-4-20250514` / `claude-sonnet-4-20250514` | `ANTHROPIC_API_KEY` | Auto-detected |
-| **Zhipu (GLM)** | `glm-4-flash` / `glm-4`              | `ZHIPU_API_KEY`     | Auto-detected |
+| **Zhipu (GLM)** | `glm-4-flash` / `glm-4`                                | `ZHIPU_API_KEY`     | Auto-detected |
 
 > **Important:** Do NOT manually set `LLM_BASE_URL` unless you use a proxy. The correct endpoints are auto-detected.
 
@@ -350,37 +362,39 @@ LLM_MODEL=gpt-4.1    # overrides all tasks with this model
 
 You can override the default model in three ways (highest priority first):
 
-| Method | Scope | Example |
-|--------|-------|---------|
-| `--model` CLI flag | Single run | `--model gpt-4.1` |
-| `LLM_MODEL` env var | All runs | `LLM_MODEL=gpt-4.1` |
-| Per-task env vars | Specific task | `LLM_GENERATION_MODEL=gpt-4o` |
+| Method              | Scope         | Example                       |
+| ------------------- | ------------- | ----------------------------- |
+| `--model` CLI flag  | Single run    | `--model gpt-4.1`             |
+| `LLM_MODEL` env var | All runs      | `LLM_MODEL=gpt-4.1`           |
+| Per-task env vars   | Specific task | `LLM_GENERATION_MODEL=gpt-4o` |
 
 Example — use a different model for a single run:
+
 ```bash
 virprotrag annotate --protein "capsid protein" --organism "Escherichia phage T4" \
     --model gpt-4.1 --output capsid.json
 ```
 
 Example — set a default model in `.env`:
+
 ```bash
 LLM_MODEL=gpt-4.1    # all VirProtRAG tasks will use this model
 ```
 
 ### Optional environment variables
 
-| Variable                  | Purpose                                                            |
-| ------------------------- | ------------------------------------------------------------------ |
-| `ENTREZ_API_KEY`          | Boosts PubMed rate 3→10 req/s                                      |
-| `MEDCPT_FAISS_INDEX_PATH` | Path to MedCPT FAISS index                                         |
-| `MEDCPT_PMIDS_PATH`       | Path to MedCPT PMIDs mapping                                       |
-| `OPENALEX_EMAIL`          | Paper quality scoring (citation count, journal prestige)           |
-| `DIAMOND_PATH`            | Path to DIAMOND binary (default: `diamond` on PATH)                |
-| `VIRPROTRAG_CACHE`        | Cross-protein cache path (reuses paper metadata across proteins)   |
-| `LLM_MODEL`               | Override model for ALL tasks (single entry, e.g., `gpt-4.1`)       |
-| `LLM_SYNONYM_MODEL`       | Override model for synonym expansion                               |
-| `LLM_EVIDENCE_MODEL`      | Override model for evidence classification                         |
-| `LLM_GENERATION_MODEL`    | Override model for function generation                          |
+| Variable                  | Purpose                                                          |
+| ------------------------- | ---------------------------------------------------------------- |
+| `ENTREZ_API_KEY`          | Boosts PubMed rate 3→10 req/s                                    |
+| `MEDCPT_FAISS_INDEX_PATH` | Path to MedCPT FAISS index                                       |
+| `MEDCPT_PMIDS_PATH`       | Path to MedCPT PMIDs mapping                                     |
+| `OPENALEX_EMAIL`          | Paper quality scoring (citation count, journal prestige)         |
+| `DIAMOND_PATH`            | Path to DIAMOND binary (default: `diamond` on PATH)              |
+| `VIRPROTRAG_CACHE`        | Cross-protein cache path (reuses paper metadata across proteins) |
+| `LLM_MODEL`               | Override model for ALL tasks (single entry, e.g., `gpt-4.1`)     |
+| `LLM_SYNONYM_MODEL`       | Override model for synonym expansion                             |
+| `LLM_EVIDENCE_MODEL`      | Override model for evidence classification                       |
+| `LLM_GENERATION_MODEL`    | Override model for function generation                           |
 
 ## Output Format (Single Protein / Batch)
 

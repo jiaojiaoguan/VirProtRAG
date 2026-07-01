@@ -2,7 +2,7 @@
 MedCPT dense retrieval over PubMed embeddings via FAISS.
 Reference: step6_medcpt_search.py
 
-Requires: faiss-cpu, transformers, torch (pip install virprotrag[medcpt])
+Requires: faiss-cpu, transformers, torch (core dependencies, auto-installed)
 """
 
 import json
@@ -43,7 +43,7 @@ def medcpt_search(
     except ImportError:
         raise ImportError(
             "MedCPT requires faiss-cpu, transformers, and torch. "
-            "Install with: pip install virprotrag[medcpt]"
+            "Install with: pip install virprotrag (these are core dependencies)"
         )
 
     if not queries:

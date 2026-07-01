@@ -3,8 +3,13 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 
-# Large data files (>1 MB)
-data/
+# Data directory: selectively track small annotation files, ignore large raw files
+data/*
+!data/LitBench.jsonl
+!data/SeqBench.jsonl
+!data/uniprotkb_taxonomy_id_10239_AND_reviewe_2026_07_01.tsv
+!data/viral_proteins.dmnd
+!data/viral_proteins.fasta
 
 # Virtual environments
 .venv/

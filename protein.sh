@@ -10,6 +10,6 @@
 
 
 # .env 中已设 MEDCPT_FAISS_INDEX_PATH 和 MEDCPT_PMIDS_PATH，无需额外指定
-# virprotrag --phase medcpt --input test_bm25.json --output test_medcpt.json --verbose
+# virprotrag --phase medcpt --input bm25_output.json --output medcpt_output.json --verbose
 
 virprotrag batch --phase medcpt --input batch_bm25/ --output batch_medcpt/

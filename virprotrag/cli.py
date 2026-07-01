@@ -1,6 +1,6 @@
 """
 Command-line interface for VirProtRAG.
-Provides five entry points: bm25, medcpt, annotate, annotate-seq, batch.
+Provides five entry points: bm25, medcpt (phases); annotate, batch, search-fasta (subcommands).
 """
 
 import argparse
@@ -260,43 +260,15 @@ def cmd_annotate(args):
         print(json.dumps(result, indent=2, ensure_ascii=False))
 
 
-def cmd_annotate_seq(args):
-    """Entry 2: Annotate a protein from its amino acid sequence."""
-    _setup_logging(args.verbose)
-
-    config = RuntimeConfig.from_env()
-    issues = config.validate()
-    if issues:
-        print("❌ Configuration issues:")
-        for issue in issues:
-            print(f"  - {issue}")
-        sys.exit(1)
-
-    # Check DIAMOND availability
-    diamond_path = config.diamond_path
-    try:
-        import subprocess
-        subprocess.run([diamond_path, "version"], capture_output=True, check=False)
-    except FileNotFoundError:
-        print(
-            f"❌ DIAMOND not found at '{diamond_path}'. "
-            f"Install DIAMOND BLASTP from https://github.com/bbuchfink/diamond "
-            f"or set DIAMOND_PATH environment variable."
-        )
-        sys.exit(1)
-
-    # TODO: DIAMOND BLASTP search + pipeline for matched proteins
-    # For now, print a placeholder
-    print("⚠️  annotate-seq is under development. Please check back soon.")
-    sys.exit(0)
-
-
 # ---------------------------------------------------------------------------
 # Batch mode helpers — shared CSV reading
 # ---------------------------------------------------------------------------
 
-def _batch_read_csv(input_path: str) -> list[dict]:
-    """Read and validate CSV/TSV input, return normalized rows.
+def _batch_read_input(input_path: str) -> list[dict]:
+    """Read and validate TSV input, return normalized rows.
+
+    Uses tab-separated values (TSV). Within a single field, use commas
+    to separate multiple values (e.g., protein_name values).
 
     Raises:
         ValueError: on missing file, empty content, or missing required columns.
@@ -304,7 +276,7 @@ def _batch_read_csv(input_path: str) -> list[dict]:
     if not os.path.exists(input_path):
         raise ValueError(f"Input file not found: {input_path}")
 
-    sep = "\t" if input_path.endswith(".tsv") else ","
+    sep = "	"
     with open(input_path, "r", encoding="utf-8") as f:
         reader = csv.DictReader(f, delimiter=sep)
         if not reader.fieldnames:
@@ -342,11 +314,12 @@ def _batch_read_csv(input_path: str) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 def _batch_bm25(config, input_path, output_dir, retrieval_topk, resume):
-    """Run BM25 phase for every row in a CSV file.
+    """Run BM25 phase for every row in a TSV file.
 
     Saves ``{entry}_bm25.json`` for each protein in *output_dir*.
     """
-    rows = _batch_read_csv(input_path)
+    from .pipeline import run_bm25_phase  # lazy import (needs biopython)
+    rows = _batch_read_input(input_path)
     os.makedirs(output_dir, exist_ok=True)
 
     import glob as _glob
@@ -522,6 +495,7 @@ def _batch_annotate(config, input_dir, output_file, topk, skip_quality,
 
     Pairs each BM25 JSON with an optional MedCPT JSON from *medcpt_dir*.
     """
+    from .pipeline import annotate_single_protein, run_annotate_phase  # lazy import (needs biopython)
     import glob as _glob
 
     os.makedirs(os.path.dirname(output_file) or ".", exist_ok=True)
@@ -698,7 +672,7 @@ def cmd_batch(args):
             print("  \u2713 All connectivity checks passed.\n")
 
     try:
-        norm_rows = _batch_read_csv(args.input)
+        norm_rows = _batch_read_input(args.input)
     except ValueError as e:
         print(f"❌ {e}")
         sys.exit(1)
@@ -852,8 +826,8 @@ def main():
     parser.add_argument("--topk", type=int, default=10, help="Top papers for generation (default: 10)")
     parser.add_argument("--retrieval-topk", type=int, default=100, help="Max PMIDs per retrieval (default: 100)")
     parser.add_argument("--batch-size", type=int, default=2048, help="Encoding batch size for MedCPT (default: 2048)")
-    parser.add_argument("--index-path", help="MedCPT FAISS index path (overrides env)")
-    parser.add_argument("--pmids-path", help="MedCPT PMIDs mapping path (overrides env)")
+    parser.add_argument("--index-path", help="MedCPT FAISS index path (only for --phase medcpt, overrides MEDCPT_FAISS_INDEX_PATH env)")
+    parser.add_argument("--pmids-path", help="MedCPT PMIDs mapping path (only for --phase medcpt, overrides MEDCPT_PMIDS_PATH env)")
     parser.add_argument("--skip-dense", action="store_true", help="Skip MedCPT (full pipeline mode)")
     parser.add_argument("--skip-quality", action="store_true", help="Skip OpenAlex quality scoring")
     parser.add_argument("--model", help="LLM model name (overrides LLM_MODEL env var and provider defaults)")
@@ -881,23 +855,13 @@ def main():
     p1.add_argument("--output", help="Output JSON file path (default: stdout)")
     p1.add_argument("--verbose", action="store_true", help="Verbose logging")
 
-    # ---- Entry 2: annotate-seq ----
-    p2 = subparsers.add_parser("annotate-seq", help="Annotate a protein from its amino acid sequence")
-    p2.add_argument("--fasta", required=True, help="Path to FASTA file")
-    p2.add_argument("--topk", type=int, default=10, help="Number of top papers for generation (default: 10)")
-    p2.add_argument("--evalue", type=float, default=1e-5, help="DIAMOND BLASTP e-value cutoff (default: 1e-5)")
-    p2.add_argument("--skip-dense", action="store_true", help="Skip MedCPT dense retrieval")
-    p2.add_argument("--skip-quality", action="store_true", help="Skip OpenAlex paper quality scoring")
-    p2.add_argument("--output", help="Output JSON file path (default: stdout)")
-    p2.add_argument("--verbose", action="store_true", help="Verbose logging")
-
-    # ---- Entry 3: batch ----
-    p3 = subparsers.add_parser("batch", help="Batch processing from CSV/TSV (all-in-one or phased)")
+    # ---- Entry 2: batch ----
+    p3 = subparsers.add_parser("batch", help="Batch processing from TSV (all-in-one or phased)")
     p3.add_argument("--phase", choices=["bm25", "medcpt", "annotate"],
                     help="Run only this pipeline phase (omit for all-in-one)")
     # Input / output
-    p3.add_argument("--input", required=True, help="Path to input CSV/TSV file (or directory of JSONs for medcpt/annotate phases)")
-    p3.add_argument("--output", help="Output directory (default: ./virprotrag_output/) or TSV path for annotate phase")
+    p3.add_argument("--input", required=True, help="Path to input TSV file (or directory of JSONs for medcpt/annotate phases)")
+    p3.add_argument("--output", help="Output directory or TSV path (default: ./virprotrag_output/)")
     # All-in-one options (ignored in phased mode)
     p3.add_argument("--topk", type=int, default=10, help="Number of top papers for generation (default: 10)")
     p3.add_argument("--skip-dense", action="store_true", help="Skip MedCPT (all-in-one mode only)")
@@ -909,11 +873,11 @@ def main():
     # Phase-specific options
     p3.add_argument("--retrieval-topk", type=int, default=100, help="Max PMIDs per retrieval (bm25/medcpt phases)")
     p3.add_argument("--batch-size", type=int, default=2048, help="Encoding batch size (medcpt phase)")
-    p3.add_argument("--index-path", help="MedCPT FAISS index path (medcpt phase, overrides env)")
-    p3.add_argument("--pmids-path", help="MedCPT PMIDs mapping path (medcpt phase, overrides env)")
+    p3.add_argument("--index-path", help="MedCPT FAISS index path (only for --phase medcpt, overrides MEDCPT_FAISS_INDEX_PATH env)")
+    p3.add_argument("--pmids-path", help="MedCPT PMIDs mapping path (only for --phase medcpt, overrides MEDCPT_PMIDS_PATH env)")
     p3.add_argument("--medcpt-dir", help="Directory of *_medcpt.json files (annotate phase, enables RRF fusion)")
 
-    # ---- Entry 4: search-fasta ----
+    # ---- Entry 3: search-fasta ----
     p4 = subparsers.add_parser("search-fasta", help="Align protein FASTA to viral DB and cross-reference annotations")
     p4.add_argument("--query", required=True, help="Path to query protein FASTA file")
     p4.add_argument("--db", help="DIAMOND database prefix (default: data/viral_proteins)")
@@ -939,11 +903,9 @@ def main():
             cmd_annotate(args)
         return
 
-    # ---- Legacy subcommand dispatch (annotate / annotate-seq / batch) ----
+    # ---- Legacy subcommand dispatch (annotate / batch) ----
     if args.command == "annotate":
         cmd_annotate(args)
-    elif args.command == "annotate-seq":
-        cmd_annotate_seq(args)
     elif args.command == "batch":
         cmd_batch(args)
     elif args.command == "search-fasta":

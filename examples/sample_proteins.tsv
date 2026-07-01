@@ -1,0 +1,4 @@
+entry	protein_name	gene_name	organism
+EXAMPLE_1	Spike glycoprotein	S	"Severe acute respiratory syndrome coronavirus 2, SARS-CoV-2"
+EXAMPLE_2	Nucleoprotein	N	"Ebola virus, EBOV"
+EXAMPLE_3	Genome polyprotein		Hepatitis C virus
