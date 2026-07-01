@@ -71,13 +71,6 @@ This saves synonyms + queries + PubMed PMIDs to `bm25_output.json`.
 **Phase 2 — MedCPT (compute node, zero network, submit via SGE/qsub):**
 
 ```bash
-#!/bin/bash
-#$ -e VirProtRAG.$JOB_ID.e
-#$ -o VirProtRAG.$JOB_ID.o
-#$ -N VirProtRAG
-#$ -cwd
-#$ -pe cpu1 8
-
 virprotrag --phase medcpt --input bm25_output.json --output medcpt_output.json --verbose
 ```
 
